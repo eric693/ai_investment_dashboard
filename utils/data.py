@@ -403,17 +403,19 @@ def claude_debate(ticker: str, fund: dict, quote: dict, vix: float, lang: str = 
     return {"bull": bull, "bear": bear, "verdict": verdict}
 
 
-def claude_macro_narrative(macro: dict, vix: float) -> str:
+def claude_macro_narrative(macro: dict, vix: float, lang: str = "en") -> str:
     macro_str = "\n".join([f"{k}: {v['current']:.2f}" for k, v in macro.items()])
+    lang_instr = " Reply in Traditional Chinese." if lang == "zh" else ""
     return claude_analyze(
-        f"Given these macro conditions, characterize the current market environment in 3 sentences. Is it expansionary or contractionary? What does it mean for equities?\n\n{macro_str}\nVIX: {vix:.1f}",
+        f"Given these macro conditions, characterize the current market environment in 3 sentences. Is it expansionary or contractionary? What does it mean for equities?\n\n{macro_str}\nVIX: {vix:.1f}{lang_instr}",
         system="You are a macro strategist. 3 sentences. Be direct and specific."
     )
 
 
-def claude_risk_summary(ticker: str, anomaly_score: float, vix: float, dd: float, sharpe: float) -> str:
+def claude_risk_summary(ticker: str, anomaly_score: float, vix: float, dd: float, sharpe: float, lang: str = "en") -> str:
+    lang_instr = " Reply in Traditional Chinese." if lang == "zh" else ""
     return claude_analyze(
-        f"Risk summary for {ticker}: VIX={vix:.1f}, anomaly_score={anomaly_score:.2f}, max_drawdown={dd*100:.1f}%, sharpe={sharpe:.2f}. In 2 sentences, assess the risk level and any recommended action.",
+        f"Risk summary for {ticker}: VIX={vix:.1f}, anomaly_score={anomaly_score:.2f}, max_drawdown={dd*100:.1f}%, sharpe={sharpe:.2f}. In 2 sentences, assess the risk level and any recommended action.{lang_instr}",
         system="You are a risk manager. 2 sentences. Be direct."
     )
 
