@@ -1,5 +1,9 @@
 import streamlit as st
 import os
+import sys
+
+# 把 src 加入 import path
+sys.path.insert(0, os.path.dirname(__file__))
 
 st.set_page_config(
     page_title="AI 投資儀表板",
@@ -7,9 +11,6 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="auto",
 )
-
-# Inject CSS via components to avoid f-string / encoding issues
-import streamlit.components.v1 as components
 
 CSS = (
     "@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500&display=swap');"
@@ -63,8 +64,6 @@ CSS = (
         "[data-testid='stHorizontalBlock']>div{width:100%!important;min-width:0!important;flex:1 1 100%!important;}"
         ".analyst-signal{font-size:15px;}"
         ".analyst-reason{font-size:11px;}"
-        ".debate-bull,.debate-bear{font-size:12px;padding:12px 14px;}"
-        ".alert-warn,.alert-danger,.alert-ok{font-size:12px;}"
         "[data-testid='stDataFrame']{overflow-x:auto!important;}"
         "[data-testid='stSidebar']{min-width:80vw!important;max-width:90vw!important;}"
     "}"
@@ -78,30 +77,27 @@ CSS = (
 
 st.markdown(f"<style>{CSS}</style>", unsafe_allow_html=True)
 
-from pages import overview, analysts, macro, risk, valuation
-
-# ── Language toggle ──────────────────────────────────────────────────────────
-if "lang" not in st.session_state:
-    st.session_state["lang"] = "zh"
+# Import from src/ folder
+from src import overview, analysts, macro, risk, valuation
 
 LABELS = {
     "zh": {
-        "title":     "AI 投資儀表板",
-        "nav":       ["總覽", "7位分析師", "總經", "風險", "估值"],
-        "pages":     ["Overview", "7 Analysts", "Macro", "Risk", "Valuation"],
-        "ticker":    "選擇股票代碼",
-        "caption1":  "數據來源：雅虎財經、FRED、Claude AI",
-        "caption2":  "快取每 5 分鐘刷新一次",
-        "lang_btn":  "English",
+        "title":    "AI 投資儀表板",
+        "nav":      ["總覽", "7位分析師", "總經", "風險", "估值"],
+        "pages":    ["Overview", "7 Analysts", "Macro", "Risk", "Valuation"],
+        "ticker":   "選擇股票代碼",
+        "cap1":     "數據來源：雅虎財經、FRED、Claude AI",
+        "cap2":     "快取每 5 分鐘刷新一次",
+        "lang_btn": "English",
     },
     "en": {
-        "title":     "AI Investment Dashboard",
-        "nav":       ["Overview", "7 Analysts", "Macro", "Risk", "Valuation"],
-        "pages":     ["Overview", "7 Analysts", "Macro", "Risk", "Valuation"],
-        "ticker":    "Select Ticker",
-        "caption1":  "Data: Yahoo Finance · FRED · Claude AI",
-        "caption2":  "Cache refreshes every 5 min",
-        "lang_btn":  "中文",
+        "title":    "AI Investment Dashboard",
+        "nav":      ["Overview", "7 Analysts", "Macro", "Risk", "Valuation"],
+        "pages":    ["Overview", "7 Analysts", "Macro", "Risk", "Valuation"],
+        "ticker":   "Select Ticker",
+        "cap1":     "Data: Yahoo Finance · FRED · Claude AI",
+        "cap2":     "Cache refreshes every 5 min",
+        "lang_btn": "中文",
     },
 }
 
@@ -113,14 +109,17 @@ PAGES = {
     "Valuation":  valuation,
 }
 
+if "lang" not in st.session_state:
+    st.session_state["lang"] = "zh"
+
 with st.sidebar:
     lang = st.session_state["lang"]
-    L = LABELS[lang]
+    L    = LABELS[lang]
 
-    col_title, col_btn = st.columns([3, 1])
-    with col_title:
+    c1, c2 = st.columns([3, 1])
+    with c1:
         st.markdown(f"## {L['title']}")
-    with col_btn:
+    with c2:
         st.markdown("<div style='padding-top:18px'>", unsafe_allow_html=True)
         if st.button(L["lang_btn"], key="lang_toggle"):
             st.session_state["lang"] = "en" if lang == "zh" else "zh"
@@ -128,11 +127,10 @@ with st.sidebar:
         st.markdown("</div>", unsafe_allow_html=True)
 
     st.markdown("---")
-
-    nav_labels = L["nav"]
-    page_keys  = L["pages"]
-    selected_label = st.radio("nav", nav_labels, label_visibility="collapsed")
-    selected_page  = page_keys[nav_labels.index(selected_label)]
+    nav_labels    = L["nav"]
+    page_keys     = L["pages"]
+    selected_label= st.radio("nav", nav_labels, label_visibility="collapsed")
+    selected_page = page_keys[nav_labels.index(selected_label)]
 
     st.markdown("---")
     ticker = st.selectbox(
@@ -141,9 +139,8 @@ with st.sidebar:
         index=0,
     )
     st.session_state["ticker"] = ticker
-    st.session_state["lang_labels"] = L
     st.markdown("---")
-    st.caption(L["caption1"])
-    st.caption(L["caption2"])
+    st.caption(L["cap1"])
+    st.caption(L["cap2"])
 
 PAGES[selected_page].render()
