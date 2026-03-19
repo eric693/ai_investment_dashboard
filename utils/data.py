@@ -2,24 +2,29 @@
 utils/data.py  —  All data fetching: Yahoo Finance, FRED, Claude AI
 """
 import os
-import time
 import requests
 import pandas as pd
 import numpy as np
 import streamlit as st
-from datetime import datetime, timedelta
+from datetime import datetime
 from anthropic import Anthropic
 
-ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
-FRED_API_KEY      = os.environ.get("FRED_API_KEY", "")
+FRED_API_KEY = os.environ.get("FRED_API_KEY", "")
 
 _client = None
 
 def get_client():
     global _client
-    if _client is None and ANTHROPIC_API_KEY:
-        _client = Anthropic(api_key=ANTHROPIC_API_KEY)
-    return _client
+    if _client is not None:
+        return _client
+    key = os.environ.get("ANTHROPIC_API_KEY", "")
+    if not key:
+        return None
+    try:
+        _client = Anthropic(api_key=key)
+        return _client
+    except Exception:
+        return None
 
 
 # ─── Yahoo Finance ────────────────────────────────────────────────────────────
@@ -354,17 +359,17 @@ def calc_dcf(
 def claude_analyze(prompt: str, system: str = "", max_tokens: int = 600) -> str:
     client = get_client()
     if not client:
-        return "_API key not configured. Set ANTHROPIC_API_KEY in environment._"
+        return "AI analysis requires ANTHROPIC_API_KEY to be set in Render environment variables."
     try:
         msg = client.messages.create(
-            model="claude-sonnet-4-20250514",
+            model="claude-sonnet-4-5-20251001",
             max_tokens=max_tokens,
             system=system or "You are a concise, data-driven financial analyst. Use plain text, no markdown headers, no bullet points. Be direct.",
             messages=[{"role": "user", "content": prompt}],
         )
         return msg.content[0].text
     except Exception as e:
-        return f"_AI analysis unavailable: {e}_"
+        return f"AI analysis error: {str(e)}"
 
 
 def claude_debate(ticker: str, fund: dict, quote: dict, vix: float) -> dict:
