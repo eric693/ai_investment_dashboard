@@ -5,21 +5,26 @@ st.set_page_config(
     page_title="AI Investment Dashboard",
     page_icon=None,
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="auto",
 )
 
-# Load custom CSS
 with open("static/css/style.css") as f:
-    st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
+    css = f.read()
+
+st.markdown(
+    f'<meta name="viewport" content="width=device-width, initial-scale=1.0">'
+    f'<style>{css}</style>',
+    unsafe_allow_html=True,
+)
 
 from pages import overview, analysts, macro, risk, valuation
 
 PAGES = {
-    "Overview": overview,
+    "Overview":   overview,
     "7 Analysts": analysts,
-    "Macro": macro,
-    "Risk": risk,
-    "Valuation": valuation,
+    "Macro":      macro,
+    "Risk":       risk,
+    "Valuation":  valuation,
 }
 
 with st.sidebar:
@@ -35,6 +40,6 @@ with st.sidebar:
     st.session_state["ticker"] = ticker
     st.markdown("---")
     st.caption("Data: Yahoo Finance · FRED · Claude AI")
-    st.caption("Auto-refresh every 5 min")
+    st.caption("Cache refreshes every 5 min")
 
 PAGES[selected].render()
