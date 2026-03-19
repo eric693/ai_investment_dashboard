@@ -372,31 +372,33 @@ def claude_analyze(prompt: str, system: str = "", max_tokens: int = 600) -> str:
         return f"AI analysis error: {str(e)}"
 
 
-def claude_debate(ticker: str, fund: dict, quote: dict, vix: float) -> dict:
+def claude_debate(ticker: str, fund: dict, quote: dict, vix: float, lang: str = "en") -> dict:
     """Run a bull-vs-bear debate through Claude."""
-    ctx = f"""
-Ticker: {ticker}
-Price: ${quote.get('price', 0):.2f}
-P/E: {fund.get('pe', 'N/A')}
-Forward P/E: {fund.get('forwardPE', 'N/A')}
-Revenue Growth: {(fund.get('revenueGrowth') or 0)*100:.1f}%
-Gross Margin: {(fund.get('grossMargins') or 0)*100:.1f}%
-Debt/Equity: {fund.get('debtToEquity', 'N/A')}
-Free Cash Flow: ${(fund.get('freeCashflow') or 0)/1e9:.2f}B
-VIX: {vix:.1f}
-52W High: ${quote.get('high52', 0):.2f}  Low: ${quote.get('low52', 0):.2f}
-"""
+    zh = lang == "zh"
+    ctx = (
+        f"Ticker: {ticker}\n"
+        f"Price: ${quote.get('price', 0):.2f}\n"
+        f"P/E: {fund.get('pe', 'N/A')}\n"
+        f"Forward P/E: {fund.get('forwardPE', 'N/A')}\n"
+        f"Revenue Growth: {(fund.get('revenueGrowth') or 0)*100:.1f}%\n"
+        f"Gross Margin: {(fund.get('grossMargins') or 0)*100:.1f}%\n"
+        f"Debt/Equity: {fund.get('debtToEquity', 'N/A')}\n"
+        f"Free Cash Flow: ${(fund.get('freeCashflow') or 0)/1e9:.2f}B\n"
+        f"VIX: {vix:.1f}\n"
+        f"52W High: ${quote.get('high52', 0):.2f}  Low: ${quote.get('low52', 0):.2f}"
+    )
+    lang_instr = " Reply in Traditional Chinese." if zh else ""
     bull = claude_analyze(
-        f"Make the strongest bullish case for {ticker} in 3 sentences. Be specific using the data.\n\nData:\n{ctx}",
-        system="You are a bullish equity analyst. 3 sentences max. No disclaimers. Use specific numbers."
+        f"Make the strongest bullish case for {ticker} in 3 sentences. Use specific numbers.\n\n{ctx}{lang_instr}",
+        system="You are a bullish equity analyst. 3 sentences max. No disclaimers."
     )
     bear = claude_analyze(
-        f"Make the strongest bearish case for {ticker} in 3 sentences. Be specific using the data.\n\nData:\n{ctx}",
-        system="You are a bearish short-seller. 3 sentences max. No disclaimers. Use specific numbers."
+        f"Make the strongest bearish case for {ticker} in 3 sentences. Use specific numbers.\n\n{ctx}{lang_instr}",
+        system="You are a bearish short-seller. 3 sentences max. No disclaimers."
     )
     verdict = claude_analyze(
-        f"Given this bull/bear debate about {ticker}, give a final verdict in 2 sentences.\nBull: {bull}\nBear: {bear}\nData: {ctx}",
-        system="You are a senior portfolio manager. 2 sentences verdict. End with one of: STRONG BUY / BUY / HOLD / REDUCE / STRONG SELL."
+        f"Bull: {bull}\nBear: {bear}\nData: {ctx}\n\nGive a 2-sentence verdict. End with STRONG BUY / BUY / HOLD / REDUCE / STRONG SELL.{lang_instr}",
+        system="You are a senior portfolio manager. 2 sentences only."
     )
     return {"bull": bull, "bear": bear, "verdict": verdict}
 
@@ -416,10 +418,11 @@ def claude_risk_summary(ticker: str, anomaly_score: float, vix: float, dd: float
     )
 
 
-def claude_full_report(ticker: str, analysts_data: list, fund: dict, macro: dict, dcf: dict) -> str:
-    analyst_summary = "\n".join([f"{a['name']}: {a['signal']} — {a['reason']}" for a in analysts_data])
+def claude_full_report(ticker: str, analysts_data: list, fund: dict, macro: dict, dcf: dict, lang: str = "en") -> str:
+    analyst_summary = "\n".join([f"{a['name']}: {a['signal']} - {a['reason']}" for a in analysts_data])
+    lang_instr = " Write in Traditional Chinese." if lang == "zh" else ""
     return claude_analyze(
-        f"Generate a brief investment report for {ticker}.\n\nAnalyst Consensus:\n{analyst_summary}\n\nDCF Intrinsic Value: ${dcf.get('intrinsic', 0):.2f}\nWACC: {dcf.get('wacc', 0)*100:.1f}%\n\nWrite 4 sentences covering: signal consensus, valuation, key risk, and final recommendation.",
-        system="You are a research analyst writing a professional investment memo. 4 sentences. End with a clear rating.",
-        max_tokens=400,
+        f"Generate a brief investment report for {ticker}.\n\nAnalyst Consensus:\n{analyst_summary}\n\nDCF Intrinsic Value: ${dcf.get('intrinsic', 0):.2f}\nWACC: {dcf.get('wacc', 0)*100:.1f}%\n\nWrite 4 sentences: signal consensus, valuation, key risk, final recommendation.{lang_instr}",
+        system="You are a research analyst. 4 sentences. End with a clear rating.",
+        max_tokens=500,
     )
