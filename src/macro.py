@@ -1,57 +1,19 @@
-"""pages/macro.py"""
+"""src/macro.py — Dark theme macro"""
 import streamlit as st
 import plotly.graph_objects as go
-import pandas as pd
 from utils.data import fetch_fred, get_macro_snapshot, fetch_vix, claude_macro_narrative
 
-ZH = {
-    "title":      "總體經濟",
-    "indicators": "美國經濟指標 (FRED)",
-    "fed_chart":  "聯準會基準利率 (24個月)",
-    "cpi_chart":  "CPI 通膨率 YoY (24個月)",
-    "unemp":      "失業率 (24個月)",
-    "spread":     "10年-2年殖利率利差 (24個月)",
-    "nfp":        "非農就業人數月增 (12個月)",
-    "env":        "AI 市場環境判定",
-    "gen_btn":    "生成總經敘述",
-    "loading":    "載入總經數據中...",
-    "generating": "分析總經環境中...",
-    "waiting":    "點擊「生成總經敘述」以獲得 AI 環境判定。",
-    "target":     "Fed 目標 2%",
-    "regime_exp": "擴張期 — 風險偏好",
-    "regime_con": "緊縮期 — 風險規避",
-    "regime_tran":"過渡期 — 混合訊號",
-    "fed_label":  "聯準會基準利率 (%)",
-    "cpi_label":  "CPI 指數",
-    "unemp_label":"失業率 (%)",
-    "spread_label":"10Y-2Y 利差 (bps)",
-    "nfp_label":  "非農就業 (千人)",
-}
-EN = {
-    "title":      "Macro",
-    "indicators": "US Economic Indicators (FRED)",
-    "fed_chart":  "Fed Funds Rate (24M)",
-    "cpi_chart":  "CPI Index (24M)",
-    "unemp":      "Unemployment Rate (24M)",
-    "spread":     "10Y–2Y Yield Spread (24M)",
-    "nfp":        "Nonfarm Payrolls (12M)",
-    "env":        "AI Market Environment Assessment",
-    "gen_btn":    "Generate Macro Narrative",
-    "loading":    "Fetching macro data...",
-    "generating": "Analyzing macro environment...",
-    "waiting":    "Click 'Generate Macro Narrative' for AI assessment.",
-    "target":     "Fed Target 2%",
-    "regime_exp": "Easing Cycle — Risk On",
-    "regime_con": "Tightening Cycle — Risk Off",
-    "regime_tran":"Transitional — Mixed Signals",
-    "fed_label":  "Fed Funds Rate (%)",
-    "cpi_label":  "CPI Index",
-    "unemp_label":"Unemployment (%)",
-    "spread_label":"10Y-2Y Spread (bps)",
-    "nfp_label":  "Nonfarm Payrolls (k)",
-}
+PLOT = dict(
+    plot_bgcolor="#0d1117", paper_bgcolor="#161b22",
+    font=dict(color="#8b949e", size=11),
+    margin=dict(l=0, r=0, t=10, b=0),
+    xaxis=dict(gridcolor="#21262d", linecolor="#21262d", tickfont=dict(color="#8b949e")),
+    yaxis=dict(gridcolor="#21262d", linecolor="#21262d", tickfont=dict(color="#8b949e")),
+    hovermode="x unified",
+    showlegend=False,
+)
 
-SNAP_LABELS_ZH = {
+SNAP_ZH = {
     "Fed Funds Rate (%)":   "聯準會利率 (%)",
     "CPI YoY (%)":          "CPI 年增率 (%)",
     "Unemployment (%)":     "失業率 (%)",
@@ -62,139 +24,123 @@ SNAP_LABELS_ZH = {
 
 def render():
     lang = st.session_state.get("lang", "zh")
-    T    = ZH if lang == "zh" else EN
+    zh   = lang == "zh"
 
-    st.markdown(f"## {T['title']}")
-    st.markdown(f"<div class='section-header'>{T['indicators']}</div>", unsafe_allow_html=True)
+    st.markdown(f"<div style='font-size:18px;font-weight:700;color:#e6edf3;margin-bottom:16px'>{'總體經濟' if zh else 'Macro Environment'}</div>", unsafe_allow_html=True)
 
-    with st.spinner(T["loading"]):
+    with st.spinner("載入總經數據..." if zh else "Fetching macro data..."):
         snap = get_macro_snapshot()
         vix  = fetch_vix()
 
-    cols = st.columns(len(snap))
+    # KPI row
+    st.markdown("<div class='kpi-grid'>", unsafe_allow_html=True)
+    cols = st.columns(len(snap) + 1)
     for i, (label, vals) in enumerate(snap.items()):
         cur  = vals["current"]
         prev = vals["prev"]
         diff = cur - prev
         unit = "%" if "%" in label else "k" if "(k)" in label else ""
-        display_label = SNAP_LABELS_ZH.get(label, label) if lang == "zh" else label.split("(")[0].strip()
-        cols[i].metric(display_label, f"{cur:.2f}{unit}", f"{diff:+.2f}{unit}")
+        disp = SNAP_ZH.get(label, label) if zh else label.split("(")[0].strip()
+        clr  = "#3fb950" if diff >= 0 else "#f85149"
+        sign = "+" if diff >= 0 else ""
+        cols[i].markdown(
+            f"<div class='kpi'><div class='kpi-label'>{disp}</div>"
+            f"<div class='kpi-val'>{cur:.2f}{unit}</div>"
+            f"<div class='kpi-sub' style='color:{clr}'>{sign}{diff:.2f}{unit}</div></div>",
+            unsafe_allow_html=True)
+    cols[-1].markdown(
+        f"<div class='kpi'><div class='kpi-label'>VIX</div>"
+        f"<div class='kpi-val'>{vix:.2f}</div>"
+        f"<div class='kpi-sub' style='color:{'#3fb950' if vix<18 else '#f85149' if vix>28 else '#d29922'}'>{'低' if zh else 'Low'} {'中' if 18<=vix<=28 else ''} {'高' if vix>28 else ''}</div></div>",
+        unsafe_allow_html=True)
+    st.markdown("</div>", unsafe_allow_html=True)
 
     st.markdown("---")
 
-    col1, col2 = st.columns(2)
+    # Charts 2x2
+    c1, c2 = st.columns(2, gap="medium")
 
-    with col1:
-        st.markdown(f"<div class='section-header'>{T['fed_chart']}</div>", unsafe_allow_html=True)
+    with c1:
+        st.markdown(f"<div class='card'>", unsafe_allow_html=True)
+        st.markdown(f"<div class='card-title'>{'聯準會基準利率 (24個月)' if zh else 'Fed Funds Rate (24M)'}</div>", unsafe_allow_html=True)
         df = fetch_fred("FEDFUNDS", 24)
         if not df.empty:
             fig = go.Figure()
-            fig.add_trace(go.Scatter(
-                x=df["date"], y=df["value"],
-                fill="tozeroy", fillcolor="rgba(30,30,30,0.06)",
-                line=dict(color="#111111", width=2),
-                hovertemplate="%{x|%b %Y}: %{y:.2f}%<extra></extra>",
-            ))
-            fig.update_layout(**_layout(260, ysuffix="%"))
+            fig.add_trace(go.Scatter(x=df["date"], y=df["value"],
+                fill="tozeroy", fillcolor="rgba(31,111,235,0.12)",
+                line=dict(color="#1f6feb", width=2),
+                hovertemplate="%{x|%b %Y}: %{y:.2f}%<extra></extra>"))
+            fig.update_layout(**PLOT, height=200, yaxis=dict(**PLOT["yaxis"], ticksuffix="%"))
             st.plotly_chart(fig, use_container_width=True)
+        st.markdown("</div>", unsafe_allow_html=True)
 
-    with col2:
-        st.markdown(f"<div class='section-header'>{T['cpi_chart']}</div>", unsafe_allow_html=True)
+    with c2:
+        st.markdown(f"<div class='card'>", unsafe_allow_html=True)
+        st.markdown(f"<div class='card-title'>{'CPI 通膨率 YoY' if zh else 'CPI Inflation YoY'}</div>", unsafe_allow_html=True)
         df2 = fetch_fred("CPIAUCSL", 24)
         if not df2.empty:
             pct = df2["value"].pct_change(12) * 100
             valid = pct.dropna()
-            if len(valid) > 0:
-                colors = ["#d94040" if v > 3 else "#2a9d5c" if v < 2 else "#f0a500" for v in valid]
+            if len(valid):
                 fig2 = go.Figure()
-                fig2.add_trace(go.Bar(
-                    x=df2["date"][12:], y=valid,
-                    marker_color=colors,
-                    hovertemplate="%{x|%b %Y}: %{y:.2f}% YoY<extra></extra>",
-                ))
-                fig2.add_hline(y=2.0, line=dict(color="#888", dash="dot", width=1),
-                    annotation_text=T["target"], annotation_position="right")
-                fig2.update_layout(**_layout(260, ysuffix="%"))
+                fig2.add_trace(go.Bar(x=df2["date"][12:], y=valid,
+                    marker_color=["#f85149" if v>3 else "#3fb950" if v<2 else "#d29922" for v in valid],
+                    hovertemplate="%{x|%b %Y}: %{y:.2f}%<extra></extra>"))
+                fig2.add_hline(y=2.0, line=dict(color="#484f58", dash="dot", width=1),
+                    annotation_text="2%", annotation_font_color="#484f58")
+                fig2.update_layout(**PLOT, height=200, yaxis=dict(**PLOT["yaxis"], ticksuffix="%"))
                 st.plotly_chart(fig2, use_container_width=True)
+        st.markdown("</div>", unsafe_allow_html=True)
 
-    col3, col4 = st.columns(2)
+    c3, c4 = st.columns(2, gap="medium")
 
-    with col3:
-        st.markdown(f"<div class='section-header'>{T['unemp']}</div>", unsafe_allow_html=True)
+    with c3:
+        st.markdown(f"<div class='card'>", unsafe_allow_html=True)
+        st.markdown(f"<div class='card-title'>{'失業率 (24個月)' if zh else 'Unemployment (24M)'}</div>", unsafe_allow_html=True)
         df3 = fetch_fred("UNRATE", 24)
         if not df3.empty:
             fig3 = go.Figure()
-            fig3.add_trace(go.Scatter(
-                x=df3["date"], y=df3["value"],
-                line=dict(color="#d94040", width=2),
-                hovertemplate="%{x|%b %Y}: %{y:.1f}%<extra></extra>",
-            ))
-            fig3.update_layout(**_layout(220, ysuffix="%"))
+            fig3.add_trace(go.Scatter(x=df3["date"], y=df3["value"],
+                line=dict(color="#f85149", width=2),
+                hovertemplate="%{x|%b %Y}: %{y:.1f}%<extra></extra>"))
+            fig3.update_layout(**PLOT, height=200, yaxis=dict(**PLOT["yaxis"], ticksuffix="%"))
             st.plotly_chart(fig3, use_container_width=True)
+        st.markdown("</div>", unsafe_allow_html=True)
 
-    with col4:
-        st.markdown(f"<div class='section-header'>{T['spread']}</div>", unsafe_allow_html=True)
+    with c4:
+        st.markdown(f"<div class='card'>", unsafe_allow_html=True)
+        st.markdown(f"<div class='card-title'>{'10Y-2Y 殖利率利差' if zh else '10Y–2Y Yield Spread'}</div>", unsafe_allow_html=True)
         df4 = fetch_fred("T10Y2Y", 24)
         if not df4.empty:
-            colors = ["#d94040" if v < 0 else "#2a9d5c" for v in df4["value"]]
             fig4 = go.Figure()
-            fig4.add_trace(go.Bar(
-                x=df4["date"], y=df4["value"],
-                marker_color=colors,
-                hovertemplate="%{x|%b %Y}: %{y:.2f} bps<extra></extra>",
-            ))
-            fig4.add_hline(y=0, line=dict(color="#333", width=1))
-            fig4.update_layout(**_layout(220))
+            fig4.add_trace(go.Bar(x=df4["date"], y=df4["value"],
+                marker_color=["#f85149" if v<0 else "#3fb950" for v in df4["value"]],
+                hovertemplate="%{x|%b %Y}: %{y:.2f}<extra></extra>"))
+            fig4.add_hline(y=0, line=dict(color="#484f58", width=1))
+            fig4.update_layout(**PLOT, height=200)
             st.plotly_chart(fig4, use_container_width=True)
+        st.markdown("</div>", unsafe_allow_html=True)
 
     st.markdown("---")
-    st.markdown(f"<div class='section-header'>{T['env']}</div>", unsafe_allow_html=True)
-
-    if st.button(T["gen_btn"]):
-        with st.spinner(T["generating"]):
+    st.markdown(f"<div class='card-title'>{'AI 市場環境判定' if zh else 'AI Market Environment'}</div>", unsafe_allow_html=True)
+    if st.button("生成總經敘述" if zh else "Generate Macro Narrative"):
+        with st.spinner("分析中..." if zh else "Analyzing..."):
             narrative = claude_macro_narrative(snap, vix, lang=lang)
         st.session_state["macro_narrative"] = narrative
-        st.session_state["macro_narrative_lang"] = lang
 
     if "macro_narrative" in st.session_state:
-        narrative = st.session_state["macro_narrative"]
-        text_lower = narrative.lower()
-        if any(w in text_lower for w in ["easing","rate cut","golden","降息","黃金","寬鬆"]):
-            regime, badge_cls = T["regime_exp"], "alert-ok"
-        elif any(w in text_lower for w in ["tighten","hawkish","contraction","縮表","緊縮","升息"]):
-            regime, badge_cls = T["regime_con"], "alert-danger"
+        txt = st.session_state["macro_narrative"]
+        lower = txt.lower()
+        if any(w in lower for w in ["easing","rate cut","golden","降息","黃金","寬鬆"]):
+            regime, cls = ("擴張期 — 風險偏好" if zh else "Easing Cycle — Risk On"), "alert-ok"
+        elif any(w in lower for w in ["tighten","hawkish","contraction","縮表","緊縮","升息"]):
+            regime, cls = ("緊縮期 — 風險規避" if zh else "Tightening — Risk Off"), "alert-danger"
         else:
-            regime, badge_cls = T["regime_tran"], "alert-warn"
-
-        st.markdown(f"<div class='{badge_cls}'><strong>{regime}</strong></div>", unsafe_allow_html=True)
+            regime, cls = ("過渡期 — 混合訊號" if zh else "Transitional — Mixed"), "alert-warn"
+        st.markdown(f"<div class='{cls}'><strong>{regime}</strong></div>", unsafe_allow_html=True)
         st.markdown(
-            f"<div style='background:#fafafa;border:1px solid #ebebeb;border-radius:10px;"
-            f"padding:18px 22px;font-size:14px;line-height:1.8;color:#222'>{narrative}</div>",
-            unsafe_allow_html=True,
-        )
+            f"<div style='background:#161b22;border:1px solid #21262d;border-radius:10px;"
+            f"padding:16px 20px;font-size:14px;line-height:1.8;color:#c9d1d9'>{txt}</div>",
+            unsafe_allow_html=True)
     else:
-        st.markdown(f"<p style='color:#aaa;font-size:13px'>{T['waiting']}</p>", unsafe_allow_html=True)
-
-    st.markdown("---")
-    st.markdown(f"<div class='section-header'>{T['nfp']}</div>", unsafe_allow_html=True)
-    df5 = fetch_fred("PAYEMS", 13)
-    if not df5.empty and len(df5) > 1:
-        mom = df5["value"].diff().dropna()
-        fig5 = go.Figure()
-        fig5.add_trace(go.Bar(
-            x=df5["date"][1:], y=mom,
-            marker_color=["#2a9d5c" if v > 0 else "#d94040" for v in mom],
-            hovertemplate="%{x|%b %Y}: %{y:,.0f}k<extra></extra>",
-        ))
-        fig5.update_layout(**_layout(200))
-        st.plotly_chart(fig5, use_container_width=True)
-
-
-def _layout(height, ysuffix=""):
-    return dict(
-        height=height, margin=dict(l=0,r=0,t=10,b=0),
-        plot_bgcolor="white", paper_bgcolor="white", showlegend=False,
-        yaxis=dict(tickfont=dict(size=11), gridcolor="#f0f0f0", ticksuffix=ysuffix),
-        xaxis=dict(tickfont=dict(size=11)),
-        hovermode="x unified",
-    )
+        st.markdown(f"<p style='color:#484f58;font-size:13px'>{'點擊按鈕獲得 AI 環境判定。' if zh else 'Click to generate AI narrative.'}</p>", unsafe_allow_html=True)

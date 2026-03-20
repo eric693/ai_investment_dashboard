@@ -1,4 +1,4 @@
-"""pages/risk.py"""
+"""src/risk.py — Dark theme risk"""
 import streamlit as st
 import numpy as np
 import pandas as pd
@@ -9,121 +9,52 @@ from utils.data import (
     claude_risk_summary,
 )
 
-ZH = {
-    "title":      "風險管理",
-    "alerts":     "即時風險警報",
-    "alert_bs":   "黑天鵝警報",
-    "alert_bs_t": "VIX 達 {v:.1f}。孤立森林異常觸發。建議減少 30-50% 倉位。",
-    "alert_el":   "波動率偏高",
-    "alert_el_t": "VIX 達 {v:.1f}。密切監控部位，考慮收緊停損。",
-    "alert_ok":   "正常市場環境",
-    "alert_ok_t": "VIX 達 {v:.1f}。未偵測到異常。標準倉位管理適用。",
-    "alert_spike":"盤中急漲急跌",
-    "alert_sp_t": "{t} 今日變動 {r:+.1f}%。{'確認成交量' if True else ''}",
-    "indicators": "風險指標",
-    "vix_lbl":    "VIX 恐慌指數",
-    "beta_lbl":   "Beta 值",
-    "vol_lbl":    "年化波動率",
-    "dd_lbl":     "最大回撤",
-    "sharpe_lbl": "夏普比率",
-    "ai_btn":     "人工智慧風險摘要",
-    "kelly":      "凱利倉位規模",
-    "kelly_sub":  "基於 AI 勝率估算",
-    "win_rate":   "勝率預估：{w:.0f}%（基於市場普遍預期+VIX調整）",
-    "wl_ratio":   "盈虧比：{r:.1f}倍",
-    "full_k":     "全凱利",
-    "half_k":     "半凱利（推薦）",
-    "fixed_k":    "固定 2% 規則",
-    "portfolio":  "投資組合規模（美元）",
-    "rec_pos":    "建議倉位：${a:,.0f}（{p:.1f}%）",
-    "full_kval":  "採用半凱利法。全凱利法 = ${v:,.0f} 美元。",
-    "of_port":    "投資組合的",
-    "anomaly":    "孤立森林 — 異常偵測（Z分數代理）",
-    "n_anom":     "{n} 個交易日偵測到異常（共 {total} 日）",
-    "high_risk":  "黑天鵝風險偏高。",
-    "no_data":    "異常偵測需要至少 20 天數據。",
-    "loading":    "載入風險數據中...",
-    "generating": "生成 AI 風險摘要中...",
-    "anomaly_thresh": "異常閾值 (2σ)",
-}
-EN = {
-    "title":      "Risk Management",
-    "alerts":     "Live Risk Alerts",
-    "alert_bs":   "Black Swan Alert",
-    "alert_bs_t": "VIX at {v:.1f}. Isolation Forest anomaly triggered. Recommend reducing exposure 30-50%.",
-    "alert_el":   "Elevated Volatility",
-    "alert_el_t": "VIX at {v:.1f}. Monitor positions closely. Consider tightening stop-losses.",
-    "alert_ok":   "Normal Conditions",
-    "alert_ok_t": "VIX at {v:.1f}. No anomalies detected. Standard position sizing applies.",
-    "alert_spike":"Intraday Spike",
-    "alert_sp_t": "{t} moved {r:+.1f}% today.",
-    "indicators": "Risk Indicators",
-    "vix_lbl":    "VIX",
-    "beta_lbl":   "Beta",
-    "vol_lbl":    "Ann. Volatility",
-    "dd_lbl":     "Max Drawdown",
-    "sharpe_lbl": "Sharpe Ratio",
-    "ai_btn":     "AI Risk Summary",
-    "kelly":      "Kelly Position Sizing",
-    "kelly_sub":  "Based on AI win-rate estimate",
-    "win_rate":   "Win rate estimate: {w:.0f}% (consensus + VIX adj.)",
-    "wl_ratio":   "Win/Loss ratio: {r:.1f}x",
-    "full_k":     "Full Kelly",
-    "half_k":     "Half Kelly (recommended)",
-    "fixed_k":    "Fixed 2% rule",
-    "portfolio":  "Portfolio size ($)",
-    "rec_pos":    "Recommended position: ${a:,.0f} ({p:.1f}%)",
-    "full_kval":  "Using Half-Kelly. Full Kelly = ${v:,.0f}.",
-    "of_port":    "of portfolio",
-    "anomaly":    "Anomaly Detection — Isolation Forest (Z-Score Proxy)",
-    "n_anom":     "{n} anomalous session(s) detected in {total}-day window.",
-    "high_risk":  " Black swan risk elevated.",
-    "no_data":    "Insufficient data for anomaly detection.",
-    "loading":    "Loading risk data...",
-    "generating": "Generating AI risk summary...",
-    "anomaly_thresh": "Anomaly threshold (2σ)",
-}
+PLOT = dict(
+    plot_bgcolor="#0d1117", paper_bgcolor="#161b22",
+    font=dict(color="#8b949e", size=11),
+    margin=dict(l=0, r=0, t=10, b=0),
+    xaxis=dict(gridcolor="#21262d", linecolor="#21262d", tickfont=dict(color="#8b949e")),
+    yaxis=dict(gridcolor="#21262d", linecolor="#21262d", tickfont=dict(color="#8b949e")),
+    hovermode="x unified",
+)
 
 
 def render():
     ticker = st.session_state.get("ticker", "TSM")
     lang   = st.session_state.get("lang", "zh")
-    T      = ZH if lang == "zh" else EN
+    zh     = lang == "zh"
 
-    st.markdown(f"## {ticker} — {T['title']}")
-
-    with st.spinner(T["loading"]):
+    with st.spinner("載入中..." if zh else "Loading..."):
         quote = fetch_quote(ticker)
         fund  = fetch_fundamentals(ticker)
         vix   = fetch_vix()
 
-    closes  = quote.get("closes", []) or []
-    price   = quote.get("price", 0)
-    beta    = fund.get("beta") or 1.0
+    closes = quote.get("closes", []) or []
+    price  = quote.get("price", 0) or 0
+    beta   = fund.get("beta") or 1.0
 
-    # ── Alerts ────────────────────────────────────────────────────────────────
-    st.markdown(f"<div class='section-header'>{T['alerts']}</div>", unsafe_allow_html=True)
+    st.markdown(f"<div style='font-size:18px;font-weight:700;color:#e6edf3;margin-bottom:16px'>{ticker} — {'風險管理' if zh else 'Risk Management'}</div>", unsafe_allow_html=True)
 
+    # Alerts
+    st.markdown(f"<div class='card-title'>{'即時風險警報' if zh else 'Live Risk Alerts'}</div>", unsafe_allow_html=True)
     if vix > 30:
-        st.markdown(f"<div class='alert-danger'><strong>{T['alert_bs']}</strong> — {T['alert_bs_t'].format(v=vix)}</div>", unsafe_allow_html=True)
+        st.markdown(f"<div class='alert-danger'><strong>{'黑天鵝警報' if zh else 'Black Swan Alert'}</strong> — VIX {vix:.1f}. {'建議減少 30-50% 倉位。' if zh else 'Recommend reducing exposure 30-50%.'}</div>", unsafe_allow_html=True)
     elif vix > 22:
-        st.markdown(f"<div class='alert-warn'><strong>{T['alert_el']}</strong> — {T['alert_el_t'].format(v=vix)}</div>", unsafe_allow_html=True)
+        st.markdown(f"<div class='alert-warn'><strong>{'波動率偏高' if zh else 'Elevated Volatility'}</strong> — VIX {vix:.1f}. {'密切監控，收緊停損。' if zh else 'Monitor closely. Tighten stop-losses.'}</div>", unsafe_allow_html=True)
     else:
-        st.markdown(f"<div class='alert-ok'><strong>{T['alert_ok']}</strong> — {T['alert_ok_t'].format(v=vix)}</div>", unsafe_allow_html=True)
+        st.markdown(f"<div class='alert-ok'><strong>{'正常環境' if zh else 'Normal Conditions'}</strong> — VIX {vix:.1f}. {'未偵測到異常。' if zh else 'No anomalies detected.'}</div>", unsafe_allow_html=True)
 
     if len(closes) > 5:
-        returns = np.diff(closes) / np.array(closes[:-1])
-        if len(returns) > 0 and abs(returns[-1]) > 0.04:
-            st.markdown(
-                f"<div class='alert-warn'><strong>{T['alert_spike']}</strong> — "
-                f"{ticker} {returns[-1]*100:+.1f}%</div>",
-                unsafe_allow_html=True)
+        rets = np.diff(closes) / np.array(closes[:-1])
+        if len(rets) > 0 and abs(rets[-1]) > 0.04:
+            st.markdown(f"<div class='alert-warn'><strong>{'盤中急動' if zh else 'Price Spike'}</strong> — {ticker} {rets[-1]*100:+.1f}% today.</div>", unsafe_allow_html=True)
 
     st.markdown("---")
-    col1, col2 = st.columns(2)
+    col1, col2 = st.columns(2, gap="medium")
 
     with col1:
-        st.markdown(f"<div class='section-header'>{T['indicators']}</div>", unsafe_allow_html=True)
+        st.markdown("<div class='card'>", unsafe_allow_html=True)
+        st.markdown(f"<div class='card-title'>{'風險指標' if zh else 'Risk Indicators'}</div>", unsafe_allow_html=True)
 
         if closes and len(closes) > 2:
             rets   = list(np.diff(closes) / np.array(closes[:-1]))
@@ -134,120 +65,109 @@ def render():
             rets, sharpe, mdd, ann_vol = [], 0.0, 0.0, 0.0
 
         metrics = [
-            (T["vix_lbl"],    f"{vix:.2f}",       min(vix/40, 1.0),       vix > 25),
-            (T["beta_lbl"],   f"{beta:.2f}",       min(abs(beta)/2, 1),    abs(beta) > 1.5),
-            (T["vol_lbl"],    f"{ann_vol:.1f}%",   min(ann_vol/60, 1),     ann_vol > 35),
-            (T["dd_lbl"],     f"{mdd*100:.1f}%",   min(abs(mdd), 1),       mdd < -0.25),
-            (T["sharpe_lbl"], f"{sharpe:.2f}",      max(0, 1-sharpe/3),    sharpe < 0.5),
+            ("VIX",                              f"{vix:.2f}",       min(vix/40,1),      vix>25),
+            ("Beta",                             f"{beta:.2f}",       min(abs(beta)/2,1), abs(beta)>1.5),
+            ("年化波動率" if zh else "Ann. Vol",  f"{ann_vol:.1f}%",  min(ann_vol/60,1),  ann_vol>35),
+            ("最大回撤" if zh else "Max Drawdown",f"{mdd*100:.1f}%",  min(abs(mdd),1),    mdd<-0.25),
+            ("夏普比率" if zh else "Sharpe",      f"{sharpe:.2f}",    max(0,1-sharpe/3),  sharpe<0.5),
         ]
-
-        for label, value, bar_pct, is_warn in metrics:
-            bar_color = "#d94040" if is_warn else "#2a9d5c"
-            st.markdown(
-                f"<div style='margin-bottom:14px'>"
-                f"<div style='display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px'>"
-                f"<span style='color:#555'>{label}</span>"
-                f"<span class='mono' style='font-weight:500;color:{'#d94040' if is_warn else '#111'}'>{value}</span>"
-                f"</div>"
-                f"<div style='background:#f0f0f0;border-radius:3px;height:5px'>"
-                f"<div style='background:{bar_color};height:5px;border-radius:3px;width:{min(bar_pct,1)*100:.0f}%'></div>"
-                f"</div></div>",
-                unsafe_allow_html=True)
-
-        if st.button(T["ai_btn"]):
-            scores = isolation_forest_score(closes[-30:] if len(closes) >= 30 else closes)
-            anomaly_score = max(scores) if scores else 0
-            with st.spinner(T["generating"]):
-                summary = claude_risk_summary(ticker, anomaly_score, vix, mdd, sharpe, lang=lang)
-            st.session_state["risk_summary"] = summary
-
-        if "risk_summary" in st.session_state:
-            st.markdown(
-                f"<div style='background:#fafafa;border:1px solid #e5e5e5;border-radius:8px;"
-                f"padding:14px;font-size:13px;line-height:1.7;color:#333;margin-top:10px'>"
-                f"{st.session_state['risk_summary']}</div>",
-                unsafe_allow_html=True)
-
-    with col2:
-        st.markdown(f"<div class='section-header'>{T['kelly']}</div>", unsafe_allow_html=True)
-        st.markdown(f"<div style='font-size:12px;color:#888;margin-bottom:12px'>{T['kelly_sub']}</div>", unsafe_allow_html=True)
-
-        rk = fund.get("recommendKey", "hold")
-        base_wr = {"strongbuy":0.68,"buy":0.60,"hold":0.50,"underperform":0.40,"sell":0.32}.get(rk, 0.50)
-        win_rate = base_wr * (1 - max(0, (vix-20)/100))
-        wl_ratio = 1.5
-        kelly_f  = kelly_fraction(win_rate, wl_ratio)
-        half_k   = kelly_f / 2
-
-        st.markdown(
-            f"<div style='font-size:13px;color:#555;line-height:1.8;margin-bottom:16px'>"
-            f"{T['win_rate'].format(w=win_rate*100)}<br>{T['wl_ratio'].format(r=wl_ratio)}"
-            f"</div>", unsafe_allow_html=True)
-
-        for label, pct in [(T["full_k"], kelly_f), (T["half_k"], half_k), (T["fixed_k"], 0.02)]:
-            is_rec = T["half_k"] in label
-            bar_color = "#111111" if is_rec else "#aaaaaa"
+        for label, value, bar_pct, is_bad in metrics:
+            bar_color = "#f85149" if is_bad else "#3fb950"
             st.markdown(
                 f"<div style='margin-bottom:14px'>"
                 f"<div style='display:flex;justify-content:space-between;font-size:13px;margin-bottom:5px'>"
-                f"<span style='color:{'#111' if is_rec else '#888'}'>{label}</span>"
-                f"<span class='mono' style='font-weight:500'>{pct*100:.1f}% {T['of_port']}</span>"
+                f"<span style='color:#8b949e'>{label}</span>"
+                f"<span style='font-weight:600;color:{'#f85149' if is_bad else '#e6edf3'};font-family:monospace'>{value}</span>"
                 f"</div>"
-                f"<div style='background:#f0f0f0;border-radius:3px;height:8px'>"
-                f"<div style='background:{bar_color};height:8px;border-radius:3px;width:{min(pct,0.5)*200:.0f}%'></div>"
-                f"</div></div>",
-                unsafe_allow_html=True)
+                f"<div style='background:#21262d;border-radius:3px;height:4px'>"
+                f"<div style='background:{bar_color};height:4px;border-radius:3px;width:{min(bar_pct,1)*100:.0f}%'></div>"
+                f"</div></div>", unsafe_allow_html=True)
 
-        portfolio_size = st.number_input(T["portfolio"], value=100_000, step=10_000, format="%d")
+        if st.button("AI 風險摘要" if zh else "AI Risk Summary"):
+            scores = isolation_forest_score(closes[-30:] if len(closes)>=30 else closes)
+            with st.spinner("分析中..." if zh else "Analyzing..."):
+                summary = claude_risk_summary(ticker, max(scores) if scores else 0, vix, mdd, sharpe, lang=lang)
+            st.session_state["risk_summary"] = summary
+        if "risk_summary" in st.session_state:
+            st.markdown(
+                f"<div style='background:#0d1117;border:1px solid #30363d;border-radius:8px;"
+                f"padding:12px;font-size:13px;line-height:1.7;color:#8b949e;margin-top:8px'>"
+                f"{st.session_state['risk_summary']}</div>", unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    with col2:
+        st.markdown("<div class='card'>", unsafe_allow_html=True)
+        st.markdown(f"<div class='card-title'>{'凱利公式倉位建議' if zh else 'Kelly Position Sizing'}</div>", unsafe_allow_html=True)
+        rk = fund.get("recommendKey","hold")
+        base_wr = {"strongbuy":0.68,"buy":0.60,"hold":0.50,"underperform":0.40,"sell":0.32}.get(rk,0.50)
+        win_rate= base_wr * (1 - max(0,(vix-20)/100))
+        wl_ratio= 1.5
+        kelly_f = kelly_fraction(win_rate, wl_ratio)
+        half_k  = kelly_f / 2
+
+        st.markdown(
+            f"<div style='font-size:13px;color:#8b949e;margin-bottom:14px'>"
+            f"{'勝率預估' if zh else 'Win rate'}: <strong style='color:#e6edf3'>{win_rate*100:.0f}%</strong> &nbsp;|&nbsp; "
+            f"{'盈虧比' if zh else 'W/L ratio'}: <strong style='color:#e6edf3'>{wl_ratio:.1f}x</strong></div>",
+            unsafe_allow_html=True)
+
+        for label, pct in [
+            ("全凱利" if zh else "Full Kelly", kelly_f),
+            ("半凱利（推薦）" if zh else "Half Kelly (recommended)", half_k),
+            ("固定 2% 規則" if zh else "Fixed 2% rule", 0.02),
+        ]:
+            is_rec = "推薦" in label or "recommend" in label.lower()
+            st.markdown(
+                f"<div style='margin-bottom:14px'>"
+                f"<div style='display:flex;justify-content:space-between;font-size:13px;margin-bottom:5px'>"
+                f"<span style='color:{'#e6edf3' if is_rec else '#8b949e'};font-weight:{'600' if is_rec else '400'}'>{label}</span>"
+                f"<span style='color:#e6edf3;font-family:monospace;font-weight:600'>{pct*100:.1f}%</span>"
+                f"</div>"
+                f"<div style='background:#21262d;border-radius:3px;height:6px'>"
+                f"<div style='background:{'#1f6feb' if is_rec else '#30363d'};height:6px;border-radius:3px;width:{min(pct,0.5)*200:.0f}%'></div>"
+                f"</div></div>", unsafe_allow_html=True)
+
+        portfolio_size = st.number_input("投資組合規模 ($)" if zh else "Portfolio size ($)", value=100_000, step=10_000, format="%d")
         alloc = portfolio_size * half_k
         st.markdown(
-            f"<div style='background:#f0faf4;border:1px solid #a8d8b8;border-radius:8px;"
-            f"padding:14px;margin-top:8px;font-size:14px;color:#1a5c2a'>"
-            f"{T['rec_pos'].format(a=alloc, p=half_k*100)}<br>"
-            f"<span style='font-size:12px;color:#555'>{T['full_kval'].format(v=portfolio_size*kelly_f)}</span>"
+            f"<div style='background:#0d2818;border:1px solid #2ea043;border-radius:8px;padding:14px;margin-top:8px'>"
+            f"<div style='font-size:14px;font-weight:600;color:#3fb950'>{'建議倉位' if zh else 'Recommended position'}: ${alloc:,.0f} ({half_k*100:.1f}%)</div>"
+            f"<div style='font-size:11px;color:#8b949e;margin-top:4px'>{'採用半凱利法。全凱利法' if zh else 'Using Half-Kelly. Full Kelly'} = ${portfolio_size*kelly_f:,.0f}</div>"
             f"</div>", unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
 
+    # Anomaly chart
     st.markdown("---")
-    st.markdown(f"<div class='section-header'>{T['anomaly']}</div>", unsafe_allow_html=True)
-
+    st.markdown("<div class='card'>", unsafe_allow_html=True)
+    st.markdown(f"<div class='card-title'>{'孤立森林異常偵測' if zh else 'Isolation Forest — Anomaly Detection'}</div>", unsafe_allow_html=True)
     if len(closes) >= 20:
         scores    = isolation_forest_score(closes)
         dates     = pd.date_range(end=pd.Timestamp.today(), periods=len(closes), freq="B")
         threshold = 2.0
-        normal_x  = [dates[i] for i,s in enumerate(scores) if s < threshold]
-        normal_y  = [scores[i] for i,s in enumerate(scores) if s < threshold]
-        anom_x    = [dates[i] for i,s in enumerate(scores) if s >= threshold]
-        anom_y    = [scores[i] for i,s in enumerate(scores) if s >= threshold]
+        nx = [dates[i] for i,s in enumerate(scores) if s < threshold]
+        ny = [scores[i] for i,s in enumerate(scores) if s < threshold]
+        ax = [dates[i] for i,s in enumerate(scores) if s >= threshold]
+        ay = [scores[i] for i,s in enumerate(scores) if s >= threshold]
 
         fig = go.Figure()
         fig.add_trace(go.Scatter(x=list(dates), y=closes, name="Price" if lang=="en" else "股價",
-            line=dict(color="#111", width=1.5), yaxis="y2",
-            hovertemplate="$%{y:.2f}<extra></extra>"))
-        fig.add_trace(go.Bar(x=normal_x, y=normal_y,
-            name="Normal" if lang=="en" else "正常",
-            marker_color="rgba(42,157,92,0.5)", yaxis="y"))
-        fig.add_trace(go.Bar(x=anom_x, y=anom_y,
-            name="Anomaly" if lang=="en" else "異常",
-            marker_color="rgba(217,64,64,0.8)", yaxis="y"))
-        fig.add_hline(y=threshold, line=dict(color="#d94040", dash="dash", width=1),
-            annotation_text=T["anomaly_thresh"], yref="y")
-        fig.update_layout(
-            height=280, margin=dict(l=0,r=60,t=10,b=0),
-            plot_bgcolor="white", paper_bgcolor="white", barmode="overlay",
-            yaxis=dict(title="Z-Score", tickfont=dict(size=11), gridcolor="#f0f0f0"),
-            yaxis2=dict(title="Price ($)" if lang=="en" else "股價 ($)", overlaying="y", side="right",
-                tickfont=dict(size=11), tickprefix="$"),
-            xaxis=dict(tickfont=dict(size=11)),
-            legend=dict(font=dict(size=11), orientation="h", y=1.05),
-            hovermode="x unified",
-        )
+            line=dict(color="#e6edf3", width=1.5), yaxis="y2", hovertemplate="$%{y:.2f}<extra></extra>"))
+        fig.add_trace(go.Bar(x=nx, y=ny, name="Normal" if lang=="en" else "正常",
+            marker_color="rgba(63,185,80,0.5)", yaxis="y"))
+        fig.add_trace(go.Bar(x=ax, y=ay, name="Anomaly" if lang=="en" else "異常",
+            marker_color="rgba(248,81,73,0.85)", yaxis="y"))
+        fig.add_hline(y=threshold, line=dict(color="#f85149", dash="dash", width=1),
+            yref="y", annotation_text="2σ", annotation_font_color="#f85149")
+        fig.update_layout(**PLOT, height=260, barmode="overlay",
+            yaxis=dict(**PLOT["yaxis"], title="Z-Score"),
+            yaxis2=dict(overlaying="y", side="right", tickprefix="$",
+                tickfont=dict(color="#8b949e"), gridcolor="#21262d"),
+            legend=dict(font=dict(size=11, color="#8b949e"), bgcolor="rgba(0,0,0,0)",
+                orientation="h", y=1.05))
         st.plotly_chart(fig, use_container_width=True)
-
-        n_anom = len(anom_x)
-        extra  = T["high_risk"] if n_anom > 5 else ""
-        st.markdown(
-            f"<span style='font-size:12px;color:{'#d94040' if n_anom > 3 else '#555'}'>"
-            f"{T['n_anom'].format(n=n_anom, total=len(closes))}{extra}</span>",
-            unsafe_allow_html=True)
+        n = len(ax)
+        clr = "#f85149" if n>3 else "#8b949e"
+        st.markdown(f"<span style='font-size:12px;color:{clr}'>{'偵測到' if zh else 'Detected'} {n} {'個異常交易日' if zh else 'anomalous sessions'}{'，黑天鵝風險偏高。' if n>5 and zh else '. Black swan risk elevated.' if n>5 else ''}</span>", unsafe_allow_html=True)
     else:
-        st.info(T["no_data"])
+        st.info("需要至少 20 天數據。" if zh else "Need at least 20 days of data.")
+    st.markdown("</div>", unsafe_allow_html=True)
